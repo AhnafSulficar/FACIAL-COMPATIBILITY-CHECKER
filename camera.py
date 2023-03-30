@@ -127,12 +127,12 @@ def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/files',methods=['POST','GET'])
-def files():
-        folder = r'static'
-        table_data=[]
-        for filename in os.listdir(folder):
-                table_data.append(filename)
-        return render_template('index2.html', table_data=table_data)
+# def files():
+#         folder = r'static'
+#         table_data=[]
+#         for filename in os.listdir(folder):
+#                 table_data.append(filename)
+#         return render_template('index2.html', table_data=table_data)
     
 @app.route('/form',methods=['POST','GET'])
 def form():
@@ -160,6 +160,8 @@ def tasks():
             similarity_score=compare_faces("./1.JPG","./2.JPG")
             print("Simalarity score:",similarity_score)
             x=0
+            return render_template('index2.html',similarity_score=similarity_score[0])
+          
             
 
         elif  request.form.get('next') == 'Next':
