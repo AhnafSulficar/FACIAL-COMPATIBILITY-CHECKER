@@ -4,16 +4,20 @@ import datetime, time
 import os, sys,glob,shutil
 import numpy as np
 from threading import Thread
+import face_recognition
+import logging
 
 lss = os.listdir("./static") 
 table_data=[]
-global capture,rec_frame, grey, switch, neg, face, rec, out
+global capture,rec_frame, grey, switch, neg, face, rec, out,save_images,image_count,x
 capture=0
 grey=0
 neg=0 
 face=0
 switch=1
 rec=0
+save_images=False
+image_count=0
 
 #make shots directory to save pics
 try:
@@ -58,9 +62,30 @@ def detect_face(frame):
         pass
     return frame
 
+def compare_faces(image1_path, image2_path):
+    try:
+        image1 = face_recognition.load_image_file(image1_path)
+        image2 = face_recognition.load_image_file(image2_path)
+
+        features = face_recognition.face_encodings(image1)[0]
+
+        new_image_features = face_recognition.face_encodings(image2)[0]
+
+        euclidean_distance = face_recognition.face_distance([features], new_image_features)
+        similarity_score = 100 - (euclidean_distance * 100)
+        return similarity_score
+    except IndexError as e:
+        logging.error(f"Could not recognize a face in one or both of the images: {str(e)}")
+        return None
+
+    except Exception as e:
+        logging.error(f"An error occurred during face comparison: {str(e)}")
+        return None
+
 
 def gen_frames():  # generate frame by frame from camera
-    global out, capture,rec_frame,s
+    global out, capture,rec_frame,save_images,image_count,x
+    x=0
     lst = os.listdir("./static") 
     while True:
         success, frame = camera.read() 
@@ -70,28 +95,20 @@ def gen_frames():  # generate frame by frame from camera
             if(grey):
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             if(neg):
-                frame=cv2.bitwise_not(frame)    
-            if(capture):
-                capture=0
-                if len(lst)<1:
-                    now = datetime.datetime.now()
-                    p = os.path.sep.join(['static', "shot_{}.png".format(str(now).replace(":",''))])
-                    s=cv2.imwrite(p, frame)
-                else:
-                    break
-
-
+                frame=cv2.bitwise_not(frame)
+            if save_images and image_count<2:
+                image_path="1.JPG" if image_count==0 else "2.JPG"  
+                cv2.imwrite(image_path,frame)
+                image_count+=1
                 
-                
-            
-            if(rec):
-                rec_frame=frame
-                frame= cv2.putText(cv2.flip(frame,1),"Recording...", (0,25), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255),4)
-                frame=cv2.flip(frame,1)
+            if image_count==2:
+                x=2
+                save_images=False
+                image_count=0          
             
                 
             try:
-                ret, buffer = cv2.imencode('.jpg', cv2.flip(frame,1))
+                ret, buffer = cv2.imencode('.JPG', cv2.flip(frame,1))
                 frame = buffer.tobytes()
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
@@ -133,11 +150,17 @@ def form():
 
 @app.route('/requests',methods=['POST','GET'])
 def tasks():
-    global switch,camera
+    global switch,camera,save_images,image_count,x
     if request.method == 'POST':
         if request.form.get('click') == 'Capture':
-            global capture
+            global capture,image_count
             capture=1
+            save_images=True
+        if x==2:
+            similarity_score=compare_faces("./1.JPG","./2.JPG")
+            print("Simalarity score:",similarity_score)
+            x=0
+            
 
         elif  request.form.get('next') == 'Next':
             return redirect(url_for('form'))
